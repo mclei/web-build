@@ -1,0 +1,24 @@
+name: Cleanup
+
+on:
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  cleanup:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SELF: ${{ github.run_id }}
+        run: |
+          gh api "repos/$GH_REPO/actions/runs?status=completed&per_page=100" --paginate \
+            --jq '.workflow_runs[].id' | { grep -vx "$SELF" || true; } |
+            while read -r id; do gh api -X DELETE "repos/$GH_REPO/actions/runs/$id" >/dev/null; done
